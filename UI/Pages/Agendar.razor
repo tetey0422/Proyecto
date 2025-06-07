@@ -1,0 +1,651 @@
+﻿@page "/agendar"
+@using System.Globalization
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+
+<style>
+    body {
+        background: url(/Fondos.jpg);
+        overflow-x: hidden;
+        width: 100%;
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        min-height: 100vh;
+    }
+
+    .fondo-transparente {
+        background-color: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 1rem;
+        padding: 2rem;
+    }
+
+    .calendario {
+        background-color: rgba(255, 255, 255, 0.95);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .dia-disponible {
+        background-color: white;
+        color: black;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid #e0e0e0;
+    }
+
+        .dia-disponible:hover {
+            background-color: #e3f2fd;
+            transform: scale(1.05);
+            border-color: #007bff;
+        }
+
+    .dia-no-disponible {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.5;
+        border: 1px solid #e0e0e0;
+    }
+
+    .dia-seleccionado {
+        background-color: #007bff !important;
+        color: white !important;
+        border-color: #007bff !important;
+    }
+
+    .dia-pasado {
+        background-color: #f5f5f5;
+        color: #bbb;
+        cursor: not-allowed;
+        opacity: 0.6;
+        border: 1px solid #e0e0e0;
+    }
+
+    .hora-disponible {
+        background-color: white;
+        border: 2px solid #007bff;
+        color: #007bff;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+        .hora-disponible:hover {
+            background-color: #007bff;
+            color: white;
+        }
+
+    .hora-ocupada {
+        background-color: #f5f5f5;
+        color: #bbb;
+        cursor: not-allowed;
+        opacity: 0.6;
+        border: 2px solid #ddd;
+    }
+
+    .hora-seleccionada {
+        background-color: #007bff !important;
+        color: white !important;
+        border-color: #007bff !important;
+    }
+
+    .btn-agendar {
+        background: linear-gradient(45deg, #007bff, #0056b3);
+        border: none;
+        box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+        transition: all 0.3s;
+    }
+
+        .btn-agendar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+        }
+
+    .dia-calendario {
+        min-height: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+
+    .horarios-container {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @@keyframes fadeIn {
+        from
+
+    {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    }
+
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @@keyframes spin {
+        0%
+
+    {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+
+    }
+
+    .form-section {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+    }
+</style>
+
+<div class="container-fluid px-4">
+    <div class="text-center mb-4">
+        <h1 class="display-4 fw-bold text-primary">Agendar Cita Médica</h1>
+        <p class="lead text-muted">Selecciona la fecha y hora que mejor se adapte a tu horario</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="fondo-transparente">
+                <!-- Formulario de datos del paciente -->
+                <div class="form-section mb-4">
+                    <h5 class="text-primary mb-3"><i class="fas fa-user me-2"></i>Datos del Paciente</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="documento" class="form-label">Documento de Identidad *</label>
+                            <input type="text" class="form-control" id="documento" @bind="pacienteDocumento"
+                                   placeholder="Ingrese su documento" required />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="especialidad" class="form-label">Especialidad (Opcional)</label>
+                            <select class="form-select" id="especialidad" @bind="especialidadSeleccionada">
+                                <option value="">Consulta General</option>
+                                @foreach (var especialidad in especialidades)
+                                {
+                                    <option value="@especialidad.Id">@especialidad.Nombre</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="motivo" class="form-label">Motivo de la Consulta</label>
+                            <input type="text" class="form-control" id="motivo" @bind="motivoConsulta"
+                                   placeholder="Breve descripción del motivo" />
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="observaciones" class="form-label">Observaciones</label>
+                            <input type="text" class="form-control" id="observaciones" @bind="observaciones"
+                                   placeholder="Información adicional" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <!-- Calendario -->
+                    <div class="col-md-7 mb-4">
+                        <div class="calendario p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <button class="btn btn-outline-primary" @onclick="MesAnterior">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <h4 class="mb-0 text-center flex-grow-1">
+                                    @fechaActual.ToString("MMMM yyyy", new CultureInfo("es-ES"))
+                                </h4>
+                                <button class="btn btn-outline-primary" @onclick="MesSiguiente">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+
+                            <!-- Días de la semana -->
+                            <div class="row text-center fw-bold text-muted small mb-2">
+                                <div class="col">Dom</div>
+                                <div class="col">Lun</div>
+                                <div class="col">Mar</div>
+                                <div class="col">Mié</div>
+                                <div class="col">Jue</div>
+                                <div class="col">Vie</div>
+                                <div class="col">Sáb</div>
+                            </div>
+
+                            <!-- Días del mes -->
+                            @for (int semana = 0; semana < semanasDelMes.Count; semana++)
+                            {
+                                <div class="row mb-1">
+                                    @for (int dia = 0; dia < 7; dia++)
+                                    {
+                                        var fechaDia = semanasDelMes[semana][dia];
+                                        var esDelMesActual = fechaDia.Month == fechaActual.Month;
+                                        var esDiaPasado = fechaDia.Date < DateTime.Today;
+                                        var esDiaSeleccionado = fechaSeleccionada?.Date == fechaDia.Date;
+
+                                        <div class="col p-1">
+                                            <div class="dia-calendario text-center p-2 rounded
+                                                         @(esDelMesActual ?
+                                                                                                    (esDiaPasado ? "dia-pasado" :
+                                                                                                     (esDiaSeleccionado ? "dia-seleccionado" : "dia-disponible")) :
+                                                                                                    "dia-no-disponible")"
+                                         @onclick="() => SeleccionarFecha(fechaDia)"
+                                         style="@(esDelMesActual ? "" : "visibility: hidden;")">
+                                        @if (esDelMesActual)
+                                                {
+                                                    <div class="fw-bold">@fechaDia.Day</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Horarios disponibles -->
+                    <div class="col-md-5">
+                        <div class="h-100">
+                            @if (fechaSeleccionada != null)
+                            {
+                                <div class="fade-in">
+                                    <h5 class="text-center mb-3 text-primary">
+                                        Horarios para @fechaSeleccionada.Value.ToString("dddd, dd 'de' MMMM", new CultureInfo("es-ES"))
+                                    </h5>
+
+                                    @if (cargandoHorarios)
+                                    {
+                                        <div class="text-center my-4">
+                                            <div class="loading-spinner"></div>
+                                            <p class="mt-2 text-muted">Cargando horarios disponibles...</p>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="row g-2 horarios-container">
+                                            @foreach (var hora in horariosDelDia)
+                                            {
+                                                var esHoraSeleccionada = horaSeleccionada == hora.Hora;
+                                                <div class="col-6 col-lg-4">
+                                                    <button class="btn w-100 py-2 small
+                                                                         @(hora.Disponible ?
+                                                                                                                           (esHoraSeleccionada ? "hora-seleccionada" : "hora-disponible") :
+                                                                                                                           "hora-ocupada")"
+                                                @onclick="() => SeleccionarHora(hora)"
+                                                disabled="@(!hora.Disponible)">
+                                            @hora.Hora.ToString("HH:mm")
+                                        </button>
+                                    </div>
+                                                                        }
+                                        </div>
+
+                                        @if (horaSeleccionada != null)
+                                        {
+                                            <div class="mt-4 p-3 bg-light rounded fade-in">
+                                                <h6 class="text-primary mb-2">Resumen de tu cita:</h6>
+                                                <p class="mb-1"><strong>Fecha:</strong> @fechaSeleccionada.Value.ToString("dddd, dd 'de' MMMM 'de' yyyy", new CultureInfo("es-ES"))</p>
+                                                <p class="mb-1"><strong>Hora:</strong> @horaSeleccionada.Value.ToString("HH:mm")</p>
+                                                <p class="mb-1"><strong>Documento:</strong> @pacienteDocumento</p>
+                                                @if (!string.IsNullOrEmpty(motivoConsulta))
+                                                {
+                                                    <p class="mb-1"><strong>Motivo:</strong> @motivoConsulta</p>
+                                                }
+                                                <p class="mb-3"><strong>Empleado asignado:</strong> Se asignará automáticamente</p>
+
+                                                <button class="btn btn-agendar btn-primary w-100 py-3 fw-bold"
+                                                        @onclick="AgendarCita"
+                                                        disabled="@(agendandoCita || string.IsNullOrEmpty(pacienteDocumento))">
+                                                    @if (agendandoCita)
+                                                    {
+                                                        <div class="loading-spinner me-2"></div>
+                                                        <span>Agendando...</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="fas fa-calendar-check me-2"></i>
+                                                        <span>Confirmar Cita</span>
+                                                    }
+                                                </button>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="text-center text-muted mt-5">
+                                    <i class="fas fa-calendar-alt fa-3x mb-3 opacity-50"></i>
+                                    <p>Selecciona una fecha en el calendario para ver los horarios disponibles</p>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (mostrarMensaje)
+                {
+                    <div class="alert alert-success alert-dismissible fade show mt-4" role="alert">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>¡Cita agendada exitosamente!</strong>
+                        @if (!string.IsNullOrEmpty(mensajeConfirmacion))
+                        {
+                            <br />
+                    
+                            <span>@mensajeConfirmacion</span>
+                        }
+                        @if (!string.IsNullOrEmpty(empleadoAsignado))
+                        {
+                            <br />
+                    
+                            <span><strong>Empleado asignado:</strong> @empleadoAsignado</span>
+                        }
+                        <button type="button" class="btn-close" @onclick="() => mostrarMensaje = false"></button>
+                    </div>
+                }
+
+                @if (mostrarError)
+                {
+                    <div class="alert alert-danger alert-dismissible fade show mt-4" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Error al agendar la cita:</strong> @mensajeError
+                        <button type="button" class="btn-close" @onclick="() => mostrarError = false"></button>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Variables del calendario
+    private DateTime fechaActual = DateTime.Now;
+    private DateTime? fechaSeleccionada;
+    private TimeSpan? horaSeleccionada;
+    private List<List<DateTime>> semanasDelMes = new();
+    private List<HorarioDisponible> horariosDelDia = new();
+
+    // Variables del formulario
+    private string pacienteDocumento = "";
+    private string motivoConsulta = "";
+    private string observaciones = "";
+    private int? especialidadSeleccionada;
+    private List<EspecialidadDto> especialidades = new();
+
+    // Variables de estado
+    private bool mostrarMensaje = false;
+    private bool mostrarError = false;
+    private bool cargandoHorarios = false;
+    private bool agendandoCita = false;
+    private string mensajeConfirmacion = "";
+    private string mensajeError = "";
+    private string empleadoAsignado = "";
+
+    // DTOs que coinciden con el backend
+    public class HorarioDisponible
+    {
+        public TimeSpan Hora { get; set; }
+        public bool Disponible { get; set; }
+    }
+
+    public class EspecialidadDto
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = "";
+        public string Descripcion { get; set; } = "";
+    }
+
+    public class CitaRequest
+    {
+        public DateTime Fecha { get; set; }
+        public TimeSpan Hora { get; set; }
+        public string PacienteDocumento { get; set; } = "";
+        public string? Motivo { get; set; }
+        public string? Observaciones { get; set; }
+        public int? EspecialidadId { get; set; }
+    }
+
+    public class CitaResponse
+    {
+        public bool Exitoso { get; set; }
+        public string Mensaje { get; set; } = "";
+        public string? CitaId { get; set; }
+        public string? EmpleadoAsignado { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        GenerarCalendario();
+        await CargarEspecialidades();
+    }
+
+    private async Task CargarEspecialidades()
+    {
+        try
+        {
+            var response = await Http.GetFromJsonAsync<List<EspecialidadDto>>("api/agenda/especialidades");
+            if (response != null)
+            {
+                especialidades = response;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error cargando especialidades: {ex.Message}");
+        }
+    }
+
+    private void GenerarCalendario()
+    {
+        semanasDelMes.Clear();
+        var primerDiaDelMes = new DateTime(fechaActual.Year, fechaActual.Month, 1);
+        var ultimoDiaDelMes = primerDiaDelMes.AddMonths(1).AddDays(-1);
+
+        var primerDiaAMostrar = primerDiaDelMes.AddDays(-(int)primerDiaDelMes.DayOfWeek);
+
+        var fechaActualIteracion = primerDiaAMostrar;
+        while (fechaActualIteracion <= ultimoDiaDelMes || fechaActualIteracion.DayOfWeek != DayOfWeek.Sunday)
+        {
+            var semana = new List<DateTime>();
+            for (int i = 0; i < 7; i++)
+            {
+                semana.Add(fechaActualIteracion);
+                fechaActualIteracion = fechaActualIteracion.AddDays(1);
+            }
+            semanasDelMes.Add(semana);
+
+            if (fechaActualIteracion > ultimoDiaDelMes && fechaActualIteracion.DayOfWeek == DayOfWeek.Sunday)
+                break;
+        }
+    }
+
+    private void MesAnterior()
+    {
+        fechaActual = fechaActual.AddMonths(-1);
+        LimpiarSeleccion();
+        GenerarCalendario();
+    }
+
+    private void MesSiguiente()
+    {
+        fechaActual = fechaActual.AddMonths(1);
+        LimpiarSeleccion();
+        GenerarCalendario();
+    }
+
+    private void LimpiarSeleccion()
+    {
+        fechaSeleccionada = null;
+        horaSeleccionada = null;
+        horariosDelDia.Clear();
+    }
+
+    private async Task SeleccionarFecha(DateTime fecha)
+    {
+        if (fecha.Month != fechaActual.Month || fecha.Date < DateTime.Today)
+            return;
+
+        fechaSeleccionada = fecha;
+        horaSeleccionada = null;
+
+        await CargarHorarios();
+    }
+
+    private async Task CargarHorarios()
+    {
+        if (fechaSeleccionada == null) return;
+
+        cargandoHorarios = true;
+        StateHasChanged();
+
+        try
+        {
+            var fechaFormateada = fechaSeleccionada.Value.ToString("yyyy-MM-dd");
+            var response = await Http.GetFromJsonAsync<List<HorarioDisponible>>($"api/agenda/horarios/{fechaFormateada}");
+
+            if (response != null)
+            {
+                horariosDelDia = response;
+            }
+            else
+            {
+                horariosDelDia.Clear();
+                mostrarError = true;
+                mensajeError = "No se pudieron cargar los horarios disponibles.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mostrarError = true;
+            mensajeError = "Error al cargar horarios disponibles. Intenta nuevamente.";
+            horariosDelDia.Clear();
+            Console.WriteLine($"Error cargando horarios: {ex.Message}");
+        }
+        finally
+        {
+            cargandoHorarios = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SeleccionarHora(HorarioDisponible horario)
+    {
+        if (!horario.Disponible) return;
+        horaSeleccionada = horario.Hora;
+    }
+
+    private async Task AgendarCita()
+    {
+        if (fechaSeleccionada == null || horaSeleccionada == null || string.IsNullOrEmpty(pacienteDocumento))
+        {
+            mostrarError = true;
+            mensajeError = "Por favor complete todos los campos requeridos.";
+            return;
+        }
+
+        agendandoCita = true;
+        mostrarError = false;
+        StateHasChanged();
+
+        try
+        {
+            var citaRequest = new CitaRequest
+            {
+                Fecha = fechaSeleccionada.Value,
+                Hora = horaSeleccionada.Value,
+                PacienteDocumento = pacienteDocumento.Trim(),
+                Motivo = string.IsNullOrWhiteSpace(motivoConsulta) ? null : motivoConsulta.Trim(),
+                Observaciones = string.IsNullOrWhiteSpace(observaciones) ? null : observaciones.Trim(),
+                EspecialidadId = especialidadSeleccionada
+            };
+
+            var response = await Http.PostAsJsonAsync("api/agenda/citas", citaRequest);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var resultado = await response.Content.ReadFromJsonAsync<CitaResponse>();
+
+                if (resultado?.Exitoso == true)
+                {
+                    mostrarMensaje = true;
+                    mensajeConfirmacion = resultado.Mensaje;
+                    empleadoAsignado = resultado.EmpleadoAsignado ?? "";
+
+                    // Limpiar formulario y recargar horarios
+                    LimpiarFormulario();
+                    await CargarHorarios();
+
+                    // Auto-ocultar mensaje después de 10 segundos
+                    _ = Task.Delay(10000).ContinueWith(async t =>
+                    {
+                        mostrarMensaje = false;
+                        await InvokeAsync(StateHasChanged);
+                    });
+                }
+                else
+                {
+                    mostrarError = true;
+                    mensajeError = resultado?.Mensaje ?? "Error desconocido al agendar la cita.";
+                }
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                try
+                {
+                    var errorResponse = await response.Content.ReadFromJsonAsync<CitaResponse>();
+                    mensajeError = errorResponse?.Mensaje ?? "Error al comunicarse con el servidor.";
+                }
+                catch
+                {
+                    mensajeError = "Error al comunicarse con el servidor.";
+                }
+                mostrarError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            mostrarError = true;
+            mensajeError = $"Error al conectar con el servidor: {ex.Message}";
+            Console.WriteLine($"Error agendando cita: {ex.Message}");
+        }
+        finally
+        {
+            agendandoCita = false;
+            StateHasChanged();
+        }
+    }
+
+    private void LimpiarFormulario()
+    {
+        pacienteDocumento = "";
+        motivoConsulta = "";
+        observaciones = "";
+        especialidadSeleccionada = null;
+        LimpiarSeleccion();
+    }
+}

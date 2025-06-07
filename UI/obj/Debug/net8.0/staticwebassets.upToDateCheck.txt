@@ -1,0 +1,13 @@
+wwwroot\CheckLab.png
+wwwroot\css\app.css
+wwwroot\css\bootstrap\bootstrap.min.css
+wwwroot\css\bootstrap\bootstrap.min.css.map
+wwwroot\favicon.png
+wwwroot\Fondos.jpg
+wwwroot\icon-192.png
+wwwroot\icon-512.png
+wwwroot\index.html
+wwwroot\laboratorio.jpg
+wwwroot\logo2.png
+wwwroot\manifest.webmanifest
+wwwroot\sample-data\weather.json
